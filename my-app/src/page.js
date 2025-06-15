@@ -1,9 +1,33 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import rules from './data/rules.json';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import rawRules from './data/rules.json';
 import './page.css';
 
+/**
+ * Flatten rules.json so every "key : value" pair is its own segment.
+ */
+const flattenRules = (rules) => {
+  const segments = [];
+  rules.forEach((rule) => {
+    if (typeof rule.text === 'string') {
+      segments.push({ id: rule.id, title: rule.title, text: rule.text.trim() });
+      return;
+    }
+    if (rule.text && typeof rule.text === 'object') {
+      Object.entries(rule.text).forEach(([key, val]) => {
+        if (!val) return;
+        segments.push({ id: `${rule.id}-${key}`, title: `${rule.title} (${key})`, text: val.trim() });
+      });
+    }
+  });
+  return segments.filter((s) => s.text.length);
+};
+
 const MidlandsTypingPractice = () => {
-  const [currentRule, setCurrentRule] = useState(null);
+  /** ------------- memoised data ------------- */
+  const allSegments = useMemo(() => flattenRules(rawRules), []);
+
+  /** ------------- state ------------- */
+  const [currentSegment, setCurrentSegment] = useState(null);
   const [userInput, setUserInput] = useState('');
   const [isActive, setIsActive] = useState(false);
   const [startTime, setStartTime] = useState(null);
@@ -13,39 +37,41 @@ const MidlandsTypingPractice = () => {
   const [wpm, setWpm] = useState(0);
   const [accuracy, setAccuracy] = useState(100);
   const [errors, setErrors] = useState(0);
+  const [typedCharsTotal, setTypedCharsTotal] = useState(0); // NEW ➜ cumulative char count
 
   const intervalRef = useRef(null);
   const inputRef = useRef(null);
 
-  const pickRandomRule = useCallback(() => {
-    const rule = rules[Math.floor(Math.random() * rules.length)];
-    const text = typeof rule.text === 'string' ? rule.text : Object.entries(rule.text).map(([key, val]) => `${key}) ${val}`).join(' ');
-    return { ...rule, text };
-  }, []);
+  /** ------------- helpers ------------- */
+  const pickRandomSegment = useCallback(() => allSegments[Math.floor(Math.random() * allSegments.length)], [allSegments]);
 
-  const generateNewRule = () => {
-    const rule = pickRandomRule();
-    setCurrentRule(rule);
+  /**
+   * Replace the current segment with a fresh one – but first add the chars the
+   * user just typed to the running total so WPM remains cumulative.
+   */
+  const generateNewSegment = () => {
+    setTypedCharsTotal((prev) => prev + userInput.length); // accumulate
     setUserInput('');
     setErrors(0);
     setAccuracy(100);
-    setWpm(0);
+    setCurrentSegment(pickRandomSegment());
+    // ❌ Never reset wpm here – it's derived from totals
   };
 
+  /** ------------- test lifecycle ------------- */
   const startTest = () => {
-    const rule = pickRandomRule();
+    if (intervalRef.current) clearInterval(intervalRef.current);
+
     const now = Date.now();
-    setCurrentRule(rule);
+    setCurrentSegment(pickRandomSegment());
     setUserInput('');
     setIsActive(true);
     setStartTime(now);
     setTimeRemaining(timeLimit);
     setShowStats(false);
-    setWpm(0);
     setAccuracy(100);
     setErrors(0);
-
-    if (intervalRef.current) clearInterval(intervalRef.current);
+    setTypedCharsTotal(0); // reset totals at test start
 
     intervalRef.current = setInterval(() => {
       const elapsed = Math.floor((Date.now() - now) / 1000);
@@ -58,68 +84,65 @@ const MidlandsTypingPractice = () => {
         setTimeRemaining(remaining);
       }
     }, 1000);
+
+    inputRef.current?.focus();
   };
 
   const endTest = () => {
+    // final chars in current input box also count toward totals
+    setTypedCharsTotal((prev) => prev + userInput.length);
     setIsActive(false);
     setShowStats(true);
     clearInterval(intervalRef.current);
   };
 
+  /** ------------- typing / metrics ------------- */
   useEffect(() => {
-    if (!isActive || !startTime || !currentRule) return;
-    const elapsed = (Date.now() - startTime) / 60000;
-    const wordsTyped = userInput.length / 5;
-    setWpm(Math.round(wordsTyped / elapsed));
-    const correct = [...userInput].filter((char, i) => char === currentRule.text[i]).length;
-    setAccuracy(Math.round((correct / (userInput.length || 1)) * 100));
+    if (!isActive || !startTime) return;
 
-    if (userInput === currentRule.text && timeRemaining > 0) {
-      generateNewRule();
-    } else if (
-      userInput.length >= currentRule.text.length - 5 &&
-      userInput !== currentRule.text &&
-      timeRemaining <= 10
-    ) {
-      setTimeLimit((prev) => prev + 60);
-      setTimeRemaining((prev) => prev + 60);
+    const elapsedMinutes = (Date.now() - startTime) / 60000;
+    const totalChars = typedCharsTotal + userInput.length; // include live chars
+    const wordsTyped = totalChars / 5;
+    setWpm(Math.max(0, Math.round(wordsTyped / Math.max(elapsedMinutes, 0.01))));
+
+    // segment‑specific accuracy / replacement
+    if (currentSegment) {
+      const correctChars = [...userInput].filter((ch, i) => ch === currentSegment.text[i]).length;
+      setAccuracy(Math.round((correctChars / (userInput.length || 1)) * 100));
+
+      if (userInput.length >= currentSegment.text.length && timeRemaining > 0) {
+        generateNewSegment();
+      }
     }
-  }, [userInput, startTime, currentRule, isActive, timeRemaining]);
+  }, [userInput, startTime, currentSegment, isActive, typedCharsTotal, timeRemaining]);
 
+  /** ------------- handlers ------------- */
   const handleInputChange = (e) => {
     if (!isActive) return;
     const value = e.target.value;
     setUserInput(value);
+
     let errorCount = 0;
-    for (let i = 0; i < value.length; i++) {
-      if (value[i] !== currentRule.text[i]) errorCount++;
-    }
+    for (let i = 0; i < value.length; i++) if (value[i] !== currentSegment.text[i]) errorCount++;
     setErrors(errorCount);
   };
 
   const getCharClass = (index) => {
-    if (index < userInput.length) {
-      return userInput[index] === currentRule.text[index] ? 'correct' : 'incorrect';
-    } else if (index === userInput.length) {
-      return 'current';
-    } else {
-      return 'pending';
-    }
+    if (index < userInput.length) return userInput[index] === currentSegment.text[index] ? 'correct' : 'incorrect';
+    if (index === userInput.length) return 'current';
+    return 'pending';
   };
 
-  const getProngs = (text) => {
-    const matches = text.match(/\([a-e]\)/gi);
-    return matches ? matches.join(', ') : null;
-  };
-
+  /** ------------- render ------------- */
   return (
     <div className="container">
       <h1 className="heading">Midlands Rules Typing Practice</h1>
       <p className="subheading">Master your typing speed while memorizing evidence law</p>
 
+      {/* controls */}
       <div className="controls gap-6">
         <div className="flex flex-col items-center">
-          <label className="text-sm text-gray-400 mb-1">Time Limit    </label>
+          <label className="text-sm text-gray-400 mb-1">Time Limit</label>
           <select
             value={timeLimit}
             onChange={(e) => setTimeLimit(Number(e.target.value))}
@@ -132,16 +155,17 @@ const MidlandsTypingPractice = () => {
         </div>
 
         <div className="flex flex-col items-center">
-          <label className="text-sm text-gray-400 mb-1">Action    </label>
+          <label className="text-sm text-gray-400 mb-1">Action</label>
           <button
             onClick={startTest}
             className="bg-blue-600 text-white font-semibold px-4 py-2 rounded shadow hover:bg-blue-700 transition"
           >
-            Start Test
+            {isActive ? 'Restart' : 'Start Test'}
           </button>
         </div>
       </div>
 
+      {/* stats */}
       <div className="stats-grid">
         <div className="stat-card">
           <div className="stat-value">{wpm}</div>
@@ -161,11 +185,11 @@ const MidlandsTypingPractice = () => {
         </div>
       </div>
 
-      {currentRule && (
+      {/* typing area */}
+      {currentSegment && (
         <div className="typing-area">
-          <h2 className="text-xl font-semibold mb-2 text-yellow-400">{currentRule.title}</h2>
-          <p className="text-sm text-gray-400 mb-2">Prongs: {getProngs(currentRule.text) || 'None'}</p>
-          {currentRule.text.split('').map((char, index) => (
+          <h2 className="text-xl font-semibold mb-2 text-yellow-400">{currentSegment.title}</h2>
+          {currentSegment.text.split('').map((char, index) => (
             <span key={index} className={getCharClass(index)}>
               {char}
             </span>
@@ -183,6 +207,7 @@ const MidlandsTypingPractice = () => {
         disabled={!isActive}
       />
 
+      {/* results */}
       {showStats && (
         <div className="mt-6 p-4 bg-gray-800 rounded">
           <h2 className="text-2xl font-bold mb-2">Results</h2>
