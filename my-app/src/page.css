@@ -1,0 +1,128 @@
+body {
+    background: linear-gradient(to bottom right, #0f172a, #1e3a8a, #1e293b);
+    font-family: 'Inter', sans-serif;
+    color: white;
+    margin: 0;
+    padding: 0;
+  }
+  
+  .container {
+    max-width: 900px;
+    margin: auto;
+    padding: 2rem;
+  }
+  
+  .heading {
+    font-size: 2.5rem;
+    font-weight: 700;
+    background: linear-gradient(to right, #facc15, #f97316);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-align: center;
+  }
+  
+  .subheading {
+    text-align: center;
+    font-size: 1.125rem;
+    color: #cbd5e1;
+    margin-bottom: 2rem;
+  }
+  
+  .controls {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin-bottom: 2rem;
+  }
+  
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+    text-align: center;
+  }
+  
+  .stat-card {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 1.5rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+  }
+  
+  .stat-value {
+    font-size: 2rem;
+    font-weight: bold;
+  }
+  
+  .stat-label {
+    font-size: 0.875rem;
+    color: #94a3b8;
+  }
+  
+  .typing-area {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 1.5rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    font-family: monospace;
+    font-size: 1rem;
+    line-height: 1.75;
+    margin-bottom: 1rem;
+    white-space: pre-wrap;
+  }
+  
+  input.typing-input {
+    width: 100%;
+    padding: 1rem;
+    font-family: monospace;
+    font-size: 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid #ccc;
+  }
+  
+  .correct {
+    background-color: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+  }
+  
+  .incorrect {
+    background-color: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+  }
+  
+  .current {
+    background-color: #3b82f6;
+    color: white;
+    animation: pulse 1s infinite;
+  }
+  
+  .pending {
+    color: #94a3b8;
+  }
+  
+  .controls select,
+.controls button {
+  background-color: #2563eb; /* blue-600 */
+  color: white;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: none;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  transition: background-color 0.2s ease, transform 0.2s ease;
+  font-size: 1rem;
+}
+
+.controls select:hover,
+.controls button:hover {
+  background-color: #1d4ed8; /* blue-700 */
+  cursor: pointer;
+  transform: scale(1.03);
+}
+
+.controls select:focus,
+.controls button:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px #93c5fd; /* blue-300 focus ring */
+}
